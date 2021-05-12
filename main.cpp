@@ -34,14 +34,21 @@ DigitalOut myled3(LED3);
 DigitalIn btn_confirm(USER_BUTTON);
 BufferedSerial pc(USBTX, USBRX);
 void Gesture(Arguments *in, Reply *out);
-void Tilt_Detection(Arguments *in, Reply *out);
+//void Tilt_Detection(Arguments *in, Reply *out);
 RPCFunction gesture(&Gesture, "Gesture");
-RPCFunction tilt(&Tilt_Detection, "Tilt_Detection");
+//RPCFunction tilt(&Tilt_Detection, "Tilt_Detection");
 
 double x, y;
-int flag1 = 0, flag2 = 0, mode = 0, Threshold_Angle = 0, receive_angle = 0, tilt_mode = 0, tilt_cnt = 0, init1 = 0, init2 = 1; 
+int flag1 = 0, flag2 = 0, mode = 0, Threshold_Angle = 0, receive_angle = 0, tilt_mode = 0, cnt = 0, init1 = 0, init2 = 1; 
+int cnt2 = 0;
+int seq[10] = {0};
+
 
 Thread t1,t2,t3;
+
+int idr[10000][3] = {0};
+int idx = 0;
+
 
 MQTT::Client<MQTTNetwork, Countdown> *pbclient;
 
@@ -72,6 +79,7 @@ if (receive_angle) {
 //	RPC::call(buf, outbuf);
 	receive_angle = 0;
 }
+/*
 if (tilt_mode) {
     sprintf(payload, "%.*s\r\n", message.payloadlen, (char*)message.payload);
     printf(payload);
@@ -86,6 +94,7 @@ if (tilt_mode) {
 	}
 	tilt_mode = 0;
 }
+*/
 //	printf("%s\r\n", outbuf);
     ++arrivedcount;
 }
@@ -141,7 +150,6 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 	// Whether we should clear the buffer next time we fetch data
 	bool should_clear_buffer = false;
 	bool got_data = false;
-
 
 
 	// The gesture index of the prediction
@@ -294,9 +302,10 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 				break;
 		}	
 */
+
 		// gesture predict and mode selection
 		if ((gesture_index < label_num) && flag1 && init1) {
-			printf("predict mode : %d\n", gesture_index);
+//			printf("predict mode : %d\n", gesture_index);
 			uLCD.text_width(2);
 			uLCD.text_height(2);
 			uLCD.color(BLUE);
@@ -304,7 +313,8 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 			uLCD.printf("%d", gesture_index); 			
 			error_reporter->Report(config.output_message[gesture_index]);
 			message_num++;
-			sprintf(buff, "predict mode:%d", gesture_index);
+			sprintf(buff, "predict_mode: %d #%d", gesture_index, cnt);
+			cnt++;
     		message.qos = MQTT::QOS0;
     		message.retained = false;
     		message.dup = false;
@@ -312,7 +322,10 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
     		message.payloadlen = strlen(buff) + 1;
     		int rc = pbclient->publish(topic, message);
 			receive_angle = 1;
-			ThisThread::sleep_for(500ms);
+
+			
+				
+			ThisThread::sleep_for(800ms);
 		}
 /*
 		// confirm mode
@@ -347,7 +360,60 @@ void client_yield(/*MQTT::Client<MQTTNetwork, Countdown> *client*/)
 
 /****************************************************************************************/
 
-int tilt_main(/*MQTT::Client<MQTTNetwork, Countdown> *client*/)
+
+
+
+int cal(void)
+{
+	
+while (1) {
+	BSP_ACCELERO_AccGetXYZ(accdata);
+	for (int k = 0; k < 3; k++) {
+		idr[idx][k] = accdata[k];
+		idx++;
+		if (idx == 9999)
+			idx = 0;
+		ThisThread::sleep_for(50ms);
+	}	
+	if (receive_angle) {
+//		printf("Hi\n");
+		for (int i = 0; i < idx; i++) {
+			if (idr[i][2] < 1000) {
+				if ((acos(idr[i][2] / 1000) *180/3.1415926) > 50) 
+					cnt2++;
+			}
+			if (idr[i][2] >= 1000) {
+				if (1000 / (acos(idr[i][2]) * 180 / 3.1415926) > 50) 
+					cnt2++;				
+			}
+		}
+		if (cnt2 >= 20)
+			seq[cnt] = 1;
+		else
+			seq[cnt] = -1;
+		
+		printf("%d\n", seq[cnt]);
+		cnt2 = 0;
+		idx = 0;
+		for (int k = 0; k < 10000; k++) {
+			for (int k2 = 0; k2 < 3; k2++) {
+				idr[k][k2] = 0; 
+			}
+		}
+	}
+	ThisThread::sleep_for(50ms);
+
+}
+
+
+
+
+}
+
+
+
+/*
+int tilt_main()
 {
 	int16_t acc_current[3] = {0};
 	int dot = 0;
@@ -393,6 +459,7 @@ int tilt_main(/*MQTT::Client<MQTTNetwork, Countdown> *client*/)
 		la = sqrt(la);
 		lb = sqrt(lb);
 */
+/*
 		if (accdata[2] > acc_current[2])
 			result = acos(acc_current[2]*1.0 / accdata[2]) * 180 / 3.1415926;
 		else
@@ -436,7 +503,7 @@ int tilt_main(/*MQTT::Client<MQTTNetwork, Countdown> *client*/)
 	}
 
 }
-
+*/
 
 
 int main(void) {
@@ -496,6 +563,8 @@ int main(void) {
 
 	t3.start(callback(&q3, &EventQueue::dispatch_forever));
 	q3.call(&client_yield);
+	t2.start(callback(&q2, &EventQueue::dispatch_forever));
+	q2.call(&cal);	
 
 	// receive commands, and send back the responses
 	char buf[256], outbuf[256];
@@ -533,7 +602,7 @@ void Gesture(Arguments *in, Reply *out)   {
 	}
 	
 }
-
+/*
 void Tilt_Detection (Arguments *in, Reply *out)   {
 
 	// In this scenario, when using RPC delimit the two arguments with a space.
@@ -547,3 +616,4 @@ void Tilt_Detection (Arguments *in, Reply *out)   {
 	}
 	
 }
+*/
