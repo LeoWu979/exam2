@@ -33,9 +33,9 @@ DigitalOut myled2(LED2);
 DigitalOut myled3(LED3);
 DigitalIn btn_confirm(USER_BUTTON);
 BufferedSerial pc(USBTX, USBRX);
-void Gesture_UI(Arguments *in, Reply *out);
+void Gesture(Arguments *in, Reply *out);
 void Tilt_Detection(Arguments *in, Reply *out);
-RPCFunction gesture(&Gesture_UI, "Gesture_UI");
+RPCFunction gesture(&Gesture, "Gesture");
 RPCFunction tilt(&Tilt_Detection, "Tilt_Detection");
 
 double x, y;
@@ -229,14 +229,10 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 			uLCD.cls();
 			uLCD.locate(0,0);
 			uLCD.color(GREEN);
-			uLCD.printf("Select angle\n"); 
+			uLCD.printf("Predict label\n"); 
 
 			// Setting uLCD of Threshold Angle selection 
-			uLCD.text_width(2);
-			uLCD.text_height(2);
-			uLCD.color(BLUE);
-			uLCD.locate(2,1);
-			uLCD.printf("25");    
+   
 
 			init1 = 1;
 
@@ -245,6 +241,8 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 		// Attempt to read new data from the accelerometer
 		got_data = ReadAccelerometer(error_reporter, model_input->data.f,
 																 input_length, should_clear_buffer);
+
+		
 
 		// If there was no new data,
 		// don't try to clear the buffer again and wait until next time
@@ -266,11 +264,13 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 		// Analyze the results to obtain a prediction
 		gesture_index = PredictGesture(interpreter->output(0)->data.f);
 
+
+
 		// Clear the buffer next time we read data
 		should_clear_buffer = gesture_index < label_num;
 
 		
-
+/*
 		// Produce an output
 		if ((gesture_index < label_num) && flag1 && (gesture_index == 0) && mode < 3)
 			mode += 1;
@@ -293,18 +293,28 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 				Threshold_Angle = 25;
 				break;
 		}	
-
+*/
 		// gesture predict and mode selection
 		if ((gesture_index < label_num) && flag1 && init1) {
-			printf("current_mode : %d\n", Threshold_Angle);
+			printf("predict mode : %d\n", gesture_index);
 			uLCD.text_width(2);
 			uLCD.text_height(2);
 			uLCD.color(BLUE);
 			uLCD.locate(2,1);
-			uLCD.printf("%d", Threshold_Angle); 			
+			uLCD.printf("%d", gesture_index); 			
 			error_reporter->Report(config.output_message[gesture_index]);
+			message_num++;
+			sprintf(buff, "predict mode:%d", gesture_index);
+    		message.qos = MQTT::QOS0;
+    		message.retained = false;
+    		message.dup = false;
+    		message.payload = (void*) buff;
+    		message.payloadlen = strlen(buff) + 1;
+    		int rc = pbclient->publish(topic, message);
+			receive_angle = 1;
+			ThisThread::sleep_for(500ms);
 		}
-
+/*
 		// confirm mode
 		if (!btn_confirm && flag1) {
 			message_num++;
@@ -320,6 +330,7 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 //    		printf("rc:  %d\r\n", rc);
 //    		printf("Puslish message: %s\r\n", buff);			
 		}
+*/
 	}
 }
 
@@ -509,7 +520,7 @@ int main(void) {
 }
 
 // Make sure the method takes in Arguments and Reply objects.
-void Gesture_UI (Arguments *in, Reply *out)   {
+void Gesture(Arguments *in, Reply *out)   {
 
 		// In this scenario, when using RPC delimit the two arguments with a space.
 	x = in->getArg<double>();
