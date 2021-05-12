@@ -34,17 +34,17 @@ DigitalOut myled3(LED3);
 DigitalIn btn_confirm(USER_BUTTON);
 BufferedSerial pc(USBTX, USBRX);
 void Gesture(Arguments *in, Reply *out);
-//void Tilt_Detection(Arguments *in, Reply *out);
+void send_data(Arguments *in, Reply *out);
 RPCFunction gesture(&Gesture, "Gesture");
-//RPCFunction tilt(&Tilt_Detection, "Tilt_Detection");
+RPCFunction send_data(&push_data, "send");
 
 double x, y;
 int flag1 = 0, flag2 = 0, mode = 0, Threshold_Angle = 0, receive_angle = 0, tilt_mode = 0, cnt = 0, init1 = 0, init2 = 1; 
 int cnt2 = 0;
 int seq[10] = {0};
+int lb[10] = {0};
 
-
-Thread t1,t2,t3;
+Thread t1,t2,t3,t4;
 
 int idr[10000][3] = {0};
 int idx = 0;
@@ -315,16 +315,15 @@ int gesture_main(/*MQTT::Client<MQTTNetwork, Countdown>* client*/) {
 			message_num++;
 			sprintf(buff, "predict_mode: %d #%d", gesture_index, cnt);
 			cnt++;
+			lb[cnt] = gesture_index;
     		message.qos = MQTT::QOS0;
     		message.retained = false;
     		message.dup = false;
     		message.payload = (void*) buff;
     		message.payloadlen = strlen(buff) + 1;
     		int rc = pbclient->publish(topic, message);
-			receive_angle = 1;
-
+			receive_angle = 1;			
 			
-				
 			ThisThread::sleep_for(800ms);
 		}
 /*
@@ -405,10 +404,24 @@ while (1) {
 
 }
 
+}
 
+int push_data(void)
+{
+	while (1) {
+		if (flag2 && !init2) {
+			printf("START\n");
+			for (int i = 0; i < 10; i++)
+				printf("%d\n", seq[i]);
+			for (int i = 0;i < 10; i++)
+				printf("%d\n", lb[i]);
+		}
+		ThisThread::sleep_for(200ms);
+	}
 
 
 }
+
 
 
 
@@ -602,18 +615,16 @@ void Gesture(Arguments *in, Reply *out)   {
 	}
 	
 }
-/*
-void Tilt_Detection (Arguments *in, Reply *out)   {
+
+void send_data (Arguments *in, Reply *out)   {
 
 	// In this scenario, when using RPC delimit the two arguments with a space.
 	y = in->getArg<double>();
 
 	flag2 = y;
 	if (y) {
-		t2.start(callback(&q2, &EventQueue::dispatch_forever));
-		q2.call(&tilt_main);
+		t4.start(&push_data);
 		init2 = 0;		
 	}
 	
 }
-*/
