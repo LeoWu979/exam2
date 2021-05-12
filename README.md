@@ -1,4 +1,4 @@
-# hw3
+# exam2
 
 ### setup<br> 
 - uLCD : tx <-> D1, rx <-> D0, reset <-> D2.<br>
